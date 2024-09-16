@@ -1,4 +1,5 @@
 const std = @import("std");
+const color = @import("color.zig");
 
 pub fn main() !void {
     const stdout = std.io.getStdOut();
@@ -18,15 +19,8 @@ pub fn writePPM(writer: anytype) !void {
     for (0..height) |y| {
         std.debug.print("\rScanlines remaining: {d} ", .{height - y});
         for (0..width) |x| {
-            const r = @as(f32, @floatFromInt(x)) / (width - 1);
-            const g = @as(f32, @floatFromInt(y)) / (height - 1);
-            const b: f32 = 0;
-
-            const ri: i32 = @intFromFloat(r * 255.999);
-            const gi: i32 = @intFromFloat(g * 255.999);
-            const bi: i32 = @intFromFloat(b * 255.999);
-
-            try writer.print("{d}\t{d}\t{d}\n", .{ ri, gi, bi });
+            const c = color.Color.new(.{ @as(f32, @floatFromInt(x)) / (width - 1), @as(f32, @floatFromInt(y)) / (height - 1), 0 });
+            try color.write(&c, writer);
         }
     }
     std.debug.print("\rDone.                     \n", .{});
