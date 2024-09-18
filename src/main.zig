@@ -59,7 +59,22 @@ pub fn writePPM(writer: anytype) !void {
     std.debug.print("\rDone.                     \n", .{});
 }
 
+fn hitSphere(center: *const Vec3, radius: f64, ray: *const Ray) bool {
+    const oc = center.sub(&ray.origin);
+    const a = ray.direction.dot(&ray.direction);
+    const b = -2.0 * ray.direction.dot(&oc);
+    const c = oc.dot(&oc) - radius * radius;
+    const discriminant = b * b - 4 * a * c;
+    return discriminant >= 0;
+}
+
 fn rayColor(ray: *const Ray) color.Color {
+    // TMP: Sphere intersection
+    const sphere_center = Vec3{ .items = .{ 0, 0, -1 } };
+    if (hitSphere(&sphere_center, 0.5, ray)) {
+        return color.Color{ .items = .{ 1, 0, 0 } };
+    }
+
     const scale = 0.5 * (ray.direction.unit().y() + 1.0); // y is in [-1, 1], scale to [0, 1]
     const white = color.Color{ .items = .{ 1, 1, 1 } };
     const blue = color.Color{ .items = .{ 0.5, 0.7, 1 } };
