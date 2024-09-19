@@ -3,8 +3,6 @@ const color = @import("color.zig");
 const Ray = @import("ray.zig").Ray;
 const Vec3 = @import("vec.zig").Vec3;
 
-const DEBUG = false;
-
 pub fn main() !void {
     const stdout = std.io.getStdOut();
     try writePPM(stdout.writer());
@@ -48,37 +46,54 @@ pub fn writePPM(writer: anytype) !void {
                 .origin = camera_origin,
                 .direction = direction,
             };
-            const c = rayColor(&ray);
 
-            if (comptime DEBUG) {
-                try writer.print("# x: {d} y: {d}: {d:0.3} {d:0.3} {d:0.3}\n", .{ x, y, direction.items[0], direction.items[1], direction.items[2] });
-            }
+            const c = rayColor(&ray);
             try color.write(&c, writer);
         }
     }
     std.debug.print("\rDone.                     \n", .{});
 }
 
-fn hitSphere(center: *const Vec3, radius: f64, ray: *const Ray) bool {
-    const oc = center.sub(&ray.origin);
-    const a = ray.direction.dot(&ray.direction);
-    const b = -2.0 * ray.direction.dot(&oc);
-    const c = oc.dot(&oc) - radius * radius;
-    const discriminant = b * b - 4 * a * c;
-    return discriminant >= 0;
-}
-
 fn rayColor(ray: *const Ray) color.Color {
     // TMP: Sphere intersection
     const sphere_center = Vec3{ .items = .{ 0, 0, -1 } };
-    if (hitSphere(&sphere_center, 0.5, ray)) {
-        return color.Color{ .items = .{ 1, 0, 0 } };
+    if (hitSphere(&sphere_center, 0.5, ray)) |record| {
+        return record.normal.add(&Vec3{ .items = .{ 1, 1, 1 } }).mult(0.5);
     }
 
     const scale = 0.5 * (ray.direction.unit().y() + 1.0); // y is in [-1, 1], scale to [0, 1]
     const white = color.Color{ .items = .{ 1, 1, 1 } };
     const blue = color.Color{ .items = .{ 0.5, 0.7, 1 } };
     return white.mult(1 - scale).add(&blue.mult(scale));
+}
+
+const HitRecord = struct {
+    hit_point: Vec3,
+    t: f64,
+    normal: Vec3,
+};
+
+fn hitSphere(center: *const Vec3, radius: f64, ray: *const Ray) ?HitRecord {
+    const oc = center.sub(&ray.origin);
+    const a = ray.direction.dot(&ray.direction);
+    const b = -2.0 * ray.direction.dot(&oc);
+    const c = oc.dot(&oc) - radius * radius;
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) {
+        return null;
+    }
+
+    // discriminant is positive, and a is always positive.
+    // Closer t is - sqrt(discriminant)
+    const t = (-b - @sqrt(discriminant)) / (2 * a);
+    const hit_point = ray.at(t);
+    const normal = hit_point.sub(center).div(radius);
+
+    return .{
+        .hit_point = hit_point,
+        .t = t,
+        .normal = normal,
+    };
 }
 
 // test "writePPM" {
