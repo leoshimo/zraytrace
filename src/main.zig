@@ -75,17 +75,15 @@ const HitRecord = struct {
 
 fn hitSphere(center: *const Vec3, radius: f64, ray: *const Ray) ?HitRecord {
     const oc = center.sub(&ray.origin);
-    const a = ray.direction.dot(&ray.direction);
-    const b = -2.0 * ray.direction.dot(&oc);
-    const c = oc.dot(&oc) - radius * radius;
-    const discriminant = b * b - 4 * a * c;
+    const a = ray.direction.length_squared();
+    const h = ray.direction.dot(&oc);
+    const c = oc.length_squared() - radius * radius;
+    const discriminant = h - a * c;
     if (discriminant < 0) {
         return null;
     }
 
-    // discriminant is positive, and a is always positive.
-    // Closer t is - sqrt(discriminant)
-    const t = (-b - @sqrt(discriminant)) / (2 * a);
+    const t = (h - @sqrt(discriminant)) / a;
     const hit_point = ray.at(t);
     const normal = hit_point.sub(center).div(radius);
 
