@@ -2,13 +2,31 @@ const std = @import("std");
 const color = @import("color.zig");
 const Ray = @import("ray.zig").Ray;
 const Vec3 = @import("vec.zig").Vec3;
+const Scene = @import("scene.zig").Scene;
+const Interval = @import("interval.zig").Interval;
 
 pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const alloc = gpa.allocator();
+    var scene = Scene.init(alloc);
+    defer {
+        scene.deinit();
+    }
+
+    try scene.add(.{ .sphere = .{
+        .center = Vec3{ .items = .{ 0, 0, -1 } },
+        .radius = 0.5,
+    } });
+    try scene.add(.{ .sphere = .{
+        .center = Vec3{ .items = .{ 0, -100.5, -1 } },
+        .radius = 100,
+    } });
+
     const stdout = std.io.getStdOut();
-    try writePPM(stdout.writer());
+    try writePPM(&scene, stdout.writer());
 }
 
-pub fn writePPM(writer: anytype) !void {
+pub fn writePPM(scene: *const Scene, writer: anytype) !void {
     const width = 400;
     const aspect_ratio = 16.0 / 9.0;
     const height = @as(comptime_int, width * (1.0 / aspect_ratio));
@@ -47,51 +65,24 @@ pub fn writePPM(writer: anytype) !void {
                 .direction = direction,
             };
 
-            const c = rayColor(&ray);
+            const c = rayColor(scene, &ray);
             try color.write(&c, writer);
         }
     }
     std.debug.print("\rDone.                     \n", .{});
 }
 
-fn rayColor(ray: *const Ray) color.Color {
-    // TMP: Sphere intersection
-    const sphere_center = Vec3{ .items = .{ 0, 0, -1 } };
-    if (hitSphere(&sphere_center, 0.5, ray)) |record| {
+fn rayColor(scene: *const Scene, ray: *const Ray) color.Color {
+    if (scene.hit(&Interval.pos, ray)) |record| {
+        // All normal vectors are unit vectors w/ components in range [-1, 1]
         return record.normal.add(&Vec3{ .items = .{ 1, 1, 1 } }).mult(0.5);
     }
 
+    // Gradient background:
     const scale = 0.5 * (ray.direction.unit().y() + 1.0); // y is in [-1, 1], scale to [0, 1]
     const white = color.Color{ .items = .{ 1, 1, 1 } };
     const blue = color.Color{ .items = .{ 0.5, 0.7, 1 } };
     return white.mult(1 - scale).add(&blue.mult(scale));
-}
-
-const HitRecord = struct {
-    hit_point: Vec3,
-    t: f64,
-    normal: Vec3,
-};
-
-fn hitSphere(center: *const Vec3, radius: f64, ray: *const Ray) ?HitRecord {
-    const oc = center.sub(&ray.origin);
-    const a = ray.direction.length_squared();
-    const h = ray.direction.dot(&oc);
-    const c = oc.length_squared() - radius * radius;
-    const discriminant = h - a * c;
-    if (discriminant < 0) {
-        return null;
-    }
-
-    const t = (h - @sqrt(discriminant)) / a;
-    const hit_point = ray.at(t);
-    const normal = hit_point.sub(center).div(radius);
-
-    return .{
-        .hit_point = hit_point,
-        .t = t,
-        .normal = normal,
-    };
 }
 
 // test "writePPM" {
