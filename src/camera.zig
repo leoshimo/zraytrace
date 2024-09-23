@@ -5,12 +5,19 @@ const Scene = @import("scene.zig").Scene;
 const color = @import("color.zig");
 const Color = color.Color;
 const Interval = @import("interval.zig").Interval;
+const rand = @import("rand.zig");
 
 pub const Config = struct {
     width: usize = 100,
     aspect_ratio: f64 = 1.0,
     focal_length: f64 = -1.0,
     viewport_height: f64 = 2.0,
+    sampling: Sampling = .none,
+};
+
+pub const Sampling = union(enum) {
+    none: void,
+    simple: struct { number_of_samples: usize },
 };
 
 pub const Camera = struct {
@@ -22,6 +29,7 @@ pub const Camera = struct {
     vp_00: Vec3,
     vp_x_step: Vec3,
     vp_y_step: Vec3,
+    sampling: Sampling,
 
     pub fn init(comptime config: Config) Self {
         const width = config.width;
@@ -51,6 +59,7 @@ pub const Camera = struct {
             .vp_00 = vp_00,
             .vp_x_step = vp_x_step,
             .vp_y_step = vp_y_step,
+            .sampling = config.sampling,
         };
     }
 
@@ -65,19 +74,28 @@ pub const Camera = struct {
         for (0..camera.height) |y| {
             std.debug.print("\rScanlines remaining: {d} ", .{camera.height - y});
             for (0..camera.width) |x| {
-                const r = camera.ray(x, y);
-                const c = rayColor(scene, &r);
+                const c: color.Color = camera.colorForPixel(scene, x, y);
                 try color.write(&c, writer);
             }
         }
         std.debug.print("\rDone.                     \n", .{});
     }
 
-    fn ray(camera: *const Self, x: usize, y: usize) Ray {
-        const x_f: f64 = @floatFromInt(x);
-        const y_f: f64 = @floatFromInt(y);
-        const direction = camera.vp_00.add(&camera.vp_x_step.mult(x_f)).add(&camera.vp_y_step.mult(y_f));
-        return Ray{ .origin = camera.position, .direction = direction };
+    fn colorForPixel(camera: *const Self, scene: *const Scene, x: usize, y: usize) color.Color {
+        switch (camera.sampling) {
+            .none => {
+                const r = camera.ray(x, y);
+                return rayColor(scene, &r);
+            },
+            .simple => |s| {
+                var c = color.Color.zero();
+                for (0..s.number_of_samples) |_| {
+                    const r = camera.ray(x, y);
+                    c.adding(&rayColor(scene, &r));
+                }
+                return c.div(@floatFromInt(s.number_of_samples));
+            },
+        }
     }
 
     fn rayColor(scene: *const Scene, r: *const Ray) Color {
@@ -91,6 +109,26 @@ pub const Camera = struct {
         const white = color.Color{ .items = .{ 1, 1, 1 } };
         const blue = color.Color{ .items = .{ 0.5, 0.7, 1 } };
         return white.mult(1 - scale).add(&blue.mult(scale));
+    }
+
+    fn ray(camera: *const Camera, x: usize, y: usize) Ray {
+        const x_f: f64 = @floatFromInt(x);
+        const y_f: f64 = @floatFromInt(y);
+
+        switch (camera.sampling) {
+            .none => {
+                const direction = camera.vp_00.add(&camera.vp_x_step.mult(x_f)).add(&camera.vp_y_step.mult(y_f));
+                return Ray{ .origin = camera.position, .direction = direction };
+            },
+            .simple => {
+                const offset_x = rand.rand() - 0.5;
+                const offset_y = rand.rand() - 0.5;
+                const direction = camera.vp_00
+                    .add(&camera.vp_x_step.mult(x_f + offset_x))
+                    .add(&camera.vp_y_step.mult(y_f + offset_y));
+                return Ray{ .origin = camera.position, .direction = direction };
+            },
+        }
     }
 };
 

@@ -5,8 +5,11 @@ const Vec3 = @import("vec.zig").Vec3;
 const Scene = @import("scene.zig").Scene;
 const Interval = @import("interval.zig").Interval;
 const Camera = @import("camera.zig").Camera;
+const rand = @import("rand.zig");
 
 pub fn main() !void {
+    try rand.init();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const alloc = gpa.allocator();
 
@@ -31,8 +34,13 @@ pub fn main() !void {
         .aspect_ratio = 16.0 / 9.0,
         .viewport_height = 2.0,
         .focal_length = -1,
+        .sampling = .{ .simple = .{
+            .number_of_samples = 100,
+        } },
     });
 
     const stdout = std.io.getStdOut();
-    try camera.render(&scene, stdout.writer());
+    var writer = std.io.bufferedWriter(stdout.writer());
+    try camera.render(&scene, writer.writer());
+    try writer.flush();
 }
